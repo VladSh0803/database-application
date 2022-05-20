@@ -1,0 +1,106 @@
+USE master
+GO
+
+IF exists(SELECT * FROM sysdatabases WHERE name='PD2Movies')
+	DROP DATABASE PD2Movies
+GO
+
+CREATE DATABASE PD2Movies
+GO
+
+USE PD2Movies
+GO
+
+CREATE TABLE Genres(
+	id INT NOT NULL PRIMARY KEY IDENTITY(1, 1),
+	Name VARCHAR(20) NOT NULL
+)
+
+CREATE TABLE Creators(
+	id INT NOT NULL PRIMARY KEY IDENTITY(1, 1),
+	Pseudonym VARCHAR(20) NOT NULL
+)
+
+CREATE TABLE Channels(
+	id INT NOT NULL PRIMARY KEY IDENTITY(1, 1),
+	Creator_id INT NOT NULL FOREIGN KEY REFERENCES Creators(id) ON DELETE CASCADE ON UPDATE CASCADE,
+	Name VARCHAR(30) NOT NULL
+)
+
+CREATE TABLE Films(
+	id INT NOT NULL PRIMARY KEY IDENTITY(1, 1),
+	Title VARCHAR(50) NOT NULL,
+	Duration NUMERIC NOT NULL,
+	Channel_id INT NOT NULL FOREIGN KEY REFERENCES Channels(id) ON DELETE CASCADE ON UPDATE CASCADE
+)
+CREATE NONCLUSTERED INDEX Channel_id ON Films (Channel_id);
+
+CREATE TABLE Film_Genre(
+	Film_id INT NOT NULL FOREIGN KEY REFERENCES Films(id) ON DELETE CASCADE ON UPDATE CASCADE,
+	Genre_id INT NOT NULL FOREIGN KEY REFERENCES Genres(id) ON DELETE CASCADE ON UPDATE CASCADE,
+	PRIMARY KEY(Film_id, Genre_id)
+)
+CREATE NONCLUSTERED INDEX Genre_id ON Film_Genre(Genre_id);
+
+CREATE TABLE Users(
+	id INT NOT NULL PRIMARY KEY IDENTITY(1, 1),
+	Pseudonym VARCHAR(20) NOT NULL,
+	Email VARCHAR(50) NOT NULL
+)
+
+CREATE TABLE Channel_User(
+	Channel_id INT NOT NULL FOREIGN KEY REFERENCES Channels(id) ON DELETE CASCADE ON UPDATE CASCADE,
+	User_id INT NOT NULL FOREIGN KEY REFERENCES Users(id) ON DELETE CASCADE ON UPDATE CASCADE,
+	PRIMARY KEY(Channel_id, User_id)
+)
+CREATE NONCLUSTERED INDEX User_id ON Channel_User(User_id);
+
+CREATE TABLE History(
+	User_id INT NOT NULL FOREIGN KEY REFERENCES Users(id) ON DELETE CASCADE ON UPDATE CASCADE,
+	Film_id INT NOT NULL FOREIGN KEY REFERENCES Films(id) ON DELETE CASCADE ON UPDATE CASCADE,
+	Date DATETIME NOT NULL,
+	PRIMARY KEY(User_id, Film_id, Date)
+);
+
+CREATE NONCLUSTERED INDEX Film_id ON History (Film_id);
+
+GO
+
+/* SP InsertFilm */
+CREATE PROCEDURE InsertFilm (@Title VARCHAR(50), @Duration INT, @Channel_id INT, @Genre_id INT) AS
+BEGIN
+	SET NOCOUNT OFF;
+
+	INSERT INTO Films (Title, Duration, Channel_id)
+	VALUES (@Title, @Duration, @Channel_id);
+
+	INSERT INTO Film_Genre(Genre_id, Film_id)
+	VALUES (@Genre_id, @@IDENTITY);
+END
+GO
+
+/* Trigger prevents delete last film genre*/
+CREATE TRIGGER deleteTriggerFilmGenre ON Film_Genre AFTER DELETE AS
+BEGIN
+	DECLARE @DeletedFGFilmID as INT;
+	DECLARE DeletedFG_Cursor CURSOR FOR SELECT Film_id FROM deleted;
+	OPEN DeletedFG_Cursor;
+
+	FETCH NEXT FROM DeletedFG_Cursor INTO @DeletedFGFilmID;
+	WHILE @@FETCH_STATUS = 0
+	BEGIN  
+		IF (SELECT COUNT(id) FROM Films WHERE id = @DeletedFGFilmID) > 0 AND
+			(SELECT COUNT(Film_id) FROM Film_Genre WHERE Film_id = @DeletedFGFilmID) <= 0
+		BEGIN
+			RAISERROR('Each film must belongs to at least one genre!', 16, 1);
+			ROLLBACK TRANSACTION;
+			RETURN;
+		END
+
+		FETCH NEXT FROM DeletedFG_Cursor INTO @DeletedFGFilmID;
+	END;  
+	
+	CLOSE DeletedFG_Cursor;
+	DEALLOCATE DeletedFG_Cursor;
+END
+GO

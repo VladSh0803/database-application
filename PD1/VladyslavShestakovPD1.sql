@@ -1,0 +1,21 @@
+CREATE DATABASE PD1Movies
+GO
+
+USE PD1Movies
+GO
+
+CREATE TABLE Movies(
+	Id		    INT	NOT NULL PRIMARY KEY IDENTITY(1,1),
+	Title		VARCHAR(50) NOT NULL,
+	ReleaseDate	DATE NOT NULL,
+	Budget	    MONEY NOT NULL,
+	AvgRating	NUMERIC(18,2) NOT NULL,
+	Imax3D	    BIT NOT NULL,
+	TicketsSold	INT NOT NULL
+)
+
+INSERT INTO Movies VALUES
+	('StartGate SG1', '2001-01-23', 380000, 8.89, 0, 87090),
+	('StartGate Atlantis', '2005-11-03', 688000, 9.65, 0, 123405),
+	('StartGate Universe', '2012-06-19', 23738020, 7.10, 1, 907301)
+	
